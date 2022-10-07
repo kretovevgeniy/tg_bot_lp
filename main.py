@@ -5,14 +5,13 @@ from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
 from datetime import datetime
-# import threading
 import arry
 import oper
 from keyb import keyb1, keyb_standart, keyb_admin, keyb_back
 
 # Бот2 900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM
 # happy kz 5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs
-bot = Bot(token='5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs')
+bot = Bot(token='900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM')
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 
@@ -140,7 +139,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
 
 async def pre_lp(chat_id):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(360)
+    await asyncio.sleep(100)
     if chat_id in arry.pre_lp:
         arry.buf_op[chat_id].ready = False
         await bot.send_message(chat_id, "Эгегей, надеюсь, чаты уже закрыты, пошло время ЛП.",
@@ -150,7 +149,7 @@ async def pre_lp(chat_id):
 
 async def lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(600)
+    await asyncio.sleep(20)
     if chat_id in arry.lp:
         arry.buf_op[chat_id].ready = False
         arry.lp.remove(chat_id)
@@ -290,29 +289,35 @@ async def test2(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=States.tech)
-async def test2(message: types.Message, state: FSMContext):
+async def restart(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
     iter = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
     arry.buf_op = {}
     for i in range(iter):
-        if (iter < len(arry.queu)):
+        if (i < len(arry.queu)):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
-            print(f"В очереди был: @{arry.que_name_id(arry.queu[iter])}")
-        if (iter < len(arry.pre_lp)):
+            print(f"В очереди был: {arry.que_name_id[arry.queu[i]]}")
+        if (i < len(arry.pre_lp)):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за неудобство',
                                    reply_markup=keyb)
-            print(f"В перед ЛП был: @{arry.que_name_id(arry.pre_lp[iter])}")
-        if (iter < len(arry.lp)):
+            print(f"В перед ЛП был: {arry.que_name_id[arry.pre_lp[i]]}")
+        if (i < len(arry.lp)):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
-            print(f"В ЛП был: @{arry.que_name_id(arry.lp[iter])}")
+            print(f"В ЛП был: {arry.que_name_id[arry.lp[i]]}")
     arry.queu = []
     arry.pre_lp = []
     arry.lp = []
     await state.finish()
+    await message.answer("Бот перезапущен. Чем могу помочь?", reply_markup=keyb_admin)
+    print("RESTART BOT")
 
 
 @dp.message_handler()
