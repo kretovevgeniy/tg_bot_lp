@@ -8,10 +8,10 @@ from datetime import datetime
 # import threading
 import arry
 import oper
-from keyb import keyb1
+from keyb import keyb1, keyb_standart, keyb_admin, keyb_back
 
-#Бот2 900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM
-#happy kz 5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs
+# Бот2 900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM
+# happy kz 5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs
 bot = Bot(token='5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs')
 dp = Dispatcher(bot, storage=MemoryStorage())
 
@@ -23,6 +23,7 @@ class States(StatesGroup):
     main_statistic = State()
     op_statistic = State()
     set_lp = State()
+    tech = State()
 
 
 @dp.message_handler(commands=['start'])
@@ -36,12 +37,9 @@ async def start(message: types.Message):
 async def set_fio(message: types.Message, state: FSMContext):
     name = message.text
     arry.que_name_id[message.chat.id] = name
-    if message.chat.id in arry.person:
-        keyb = ["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?", "Изменить количество ЛП"]
-    else:
-        keyb = ["Встать в очередь", "Сколько в очeреди?"]
+    keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
     await message.answer(f'Приятно познакомиться, {name} :)\nТеперь ты можешь пользоваться моим функционалом.',
-                         reply_markup=keyb1(keyb))
+                         reply_markup=keyb)
     await state.finish()
 
 
@@ -60,8 +58,7 @@ def day_stat():
 async def main_statistic_1(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         await state.finish()
         return
     i = 0
@@ -80,8 +77,7 @@ async def main_statistic_1(message: types.Message, state: FSMContext):
     elif message.text == '6 дней назад':
         i = 6
     if len(arry.day_oper[i]) == 0:
-        await message.answer("Пусто :(", reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика",
-                                                             "Кто сейчас?", "Изменить количество ЛП"]))
+        await message.answer("Пусто :(", reply_markup=keyb_admin)
         await state.finish()
         return
     await message.answer("Теперь перешли мне любое сообщение оператора, по которому хочешь узнать статистику, либо "
@@ -96,19 +92,17 @@ async def main_statistic_1(message: types.Message, state: FSMContext):
 async def main_statistic_2(message: types.Message, state: FSMContext):
     if message.text == "Назад":
         await message.answer("Чем могу помочь?",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         await state.finish()
         return
+
     async def send(i):
         text = f'ФИО: {i.fio} \nДата: {i.date}\nВстал в очередь в {i.que} \nВышел в перед обедом в {i.pre_start} ' \
-               f'\nВышел в обед в {i.start} \nВернулся в чаты в {i.chat}'
+               f'\nВышел в ЛП в {i.start} \nВернулся в чаты в {i.chat}'
         await message.answer(text)
 
     async def send_2():
-        await message.answer("Чем еще могу помочь? :)", reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?",
-                                                                            "Статистика", "Кто сейчас?",
-                                                                            "Изменить количество ЛП"]))
+        await message.answer("Чем еще могу помочь? :)", reply_markup=keyb_admin)
 
     j = arry.i
     id = 0
@@ -119,11 +113,10 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
         try:
             id = message.forward_from.id
         except:
-            await message.answer("Настройки приватности оператора не позволяют выяснить его ID. Попроси, пожалуйста, "
-                                 "оператора внести этого бота в исключения в разделе \"Настройки\" -> "
-                                 "\"Конфиденциальность\" -> \"Пересылка сообщений\"",
-                                 reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика",
-                                                     "Кто сейчас?", "Изменить количество ЛП"]))
+            await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
+                                 "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
+                                 "исключения в разделе \"Настройки\" -> \"Конфиденциальность\" -> \"Пересылка "
+                                 "сообщений\"", reply_markup=keyb_admin)
             await state.finish()
             return
     else:
@@ -161,11 +154,8 @@ async def lp(chat_id, state: FSMContext):
     if chat_id in arry.lp:
         arry.buf_op[chat_id].ready = False
         arry.lp.remove(chat_id)
-        if chat_id in arry.person:
-            keyb = ["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?", "Изменить количество ЛП"]
-        else:
-            keyb = ["Встать в очередь", "Сколько в очeреди?"]
-        await bot.send_message(chat_id, "ЛП закончился, выходи в чаты.", reply_markup=keyb1(keyb))
+        keyb = keyb_admin if chat_id in arry.person else keyb_standart
+        await bot.send_message(chat_id, "ЛП закончился, выходи в чаты.", reply_markup=keyb)
         arry.buf_op[chat_id].chat = datetime.now().strftime("%H:%M:%S")
         arry.buf_op[chat_id].date = datetime.now().date()
         if len(arry.day_oper[0]) > 0:
@@ -181,7 +171,7 @@ async def start_lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].pre_start = datetime.now().strftime("%H:%M:%S")
     text = "Оказывается, очередь как раз скоро подойдет! Выходи в \"перед обедом\"и закрывай чаты :)"
     await bot.send_message(chat_id, text, reply_markup=keyb1(["Зaкрыл(-а) чаты"]))
-    arry.queu.pop(0)
+    arry.queu.remove(chat_id)
     arry.pre_lp.append(chat_id)
     await pre_lp(chat_id)
     if chat_id in arry.pre_lp:
@@ -224,8 +214,7 @@ async def who_now(chat_id):
 async def set_lp(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         await state.finish()
         return
     old_lp = arry.lp_now
@@ -237,8 +226,7 @@ async def set_lp(message: types.Message, state: FSMContext):
                                           datetime.now().strftime("%H:%M:%S"), date=datetime.now().date()))
         arry.lp_now = int(message.text)
         await message.answer(f'Количество одновременных ЛП изменилось. Новое значение: {message.text}',
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         if len(arry.queu) == 0:
             await state.finish()
             return
@@ -253,28 +241,24 @@ async def set_lp(message: types.Message, state: FSMContext):
 async def test(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         await state.finish()
         return
     try:
         id = message.forward_from.id
     except:
-        await message.answer("Настройки приватности оператора не позволяют выяснить его ID. Попроси, пожалуйста, "
-                             "оператора внести этого бота в исключения в разделе \"Настройки\" -> "
-                             "\"Конфиденциальность\" -> \"Пересылка сообщений\"",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика",
-                                                 "Кто сейчас?", "Изменить количество ЛП"]))
+        await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
+                             "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
+                             "исключения в разделе \"Настройки\" -> \"Конфиденциальность\" -> \"Пересылка "
+                             "сообщений\"", reply_markup=keyb_admin)
         await state.finish()
         return
     arry.person.append(id)
     await message.answer(f'Окей, теперь {message.forward_from.first_name} админ',
-                         reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                             "Изменить количество ЛП"]))
+                         reply_markup=keyb_admin)
     await bot.send_message(292075774,
                            f'@{message.chat.username} добавил нового админа: @{message.forward_from.username}')
-    await bot.send_message(id, "Ты админ", reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика",
-                                                               "Кто сейчас?", "Изменить количество ЛП"]))
+    await bot.send_message(id, "Ты админ", reply_markup=keyb_admin)
     await state.finish()
 
 
@@ -282,29 +266,52 @@ async def test(message: types.Message, state: FSMContext):
 async def test2(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+                             reply_markup=keyb_admin)
         await state.finish()
         return
     try:
         id = message.forward_from.id
     except:
-        await message.answer("Настройки приватности оператора не позволяют выяснить его ID. Попроси, пожалуйста, "
-                             "оператора внести этого бота в исключения в разделе \"Настройки\" -> "
-                             "\"Конфиденциальность\" -> \"Пересылка сообщений\"",
-                             reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                                 "Изменить количество ЛП"]))
+        await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
+                             "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
+                             "исключения в разделе \"Настройки\" -> \"Конфиденциальность\" -> \"Пересылка "
+                             "сообщений\"", reply_markup=keyb_admin)
         await state.finish()
         return
     if id not in arry.person:
         await state.finish()
         return
     arry.person.remove(id)
+    await state.finish()
     await bot.send_message(message.chat.id, f'Окей, теперь {message.forward_from.first_name} не админ',
-                           reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика", "Кто сейчас?",
-                                               "Изменить количество ЛП"]))
+                           reply_markup=keyb_admin)
     await bot.send_message(292075774, f'@{message.chat.username} удалил админа: @{message.forward_from.username}')
-    await bot.send_message(id, "Ты не админ", reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?"]))
+    await bot.send_message(id, "Ты не админ", reply_markup=keyb_standart)
+
+
+@dp.message_handler(state=States.tech)
+async def test2(message: types.Message, state: FSMContext):
+    iter = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
+    arry.buf_op = {}
+    for i in range(iter):
+        if (iter < len(arry.queu)):
+            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+            await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
+                                                 'неудобство', reply_markup=keyb)
+            print(f"В очереди был: @{arry.que_name_id(arry.queu[iter])}")
+        if (iter < len(arry.pre_lp)):
+            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+            await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за неудобство',
+                                   reply_markup=keyb)
+            print(f"В перед ЛП был: @{arry.que_name_id(arry.pre_lp[iter])}")
+        if (iter < len(arry.lp)):
+            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+            await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
+                                                 'неудобство', reply_markup=keyb)
+            print(f"В ЛП был: @{arry.que_name_id(arry.lp[iter])}")
+    arry.queu = []
+    arry.pre_lp = []
+    arry.lp = []
     await state.finish()
 
 
@@ -320,7 +327,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
         arry.buf_op[message.chat.id].ready = False
         arry.queu.append(message.chat.id)
 
-        if len(arry.lp)+len(arry.pre_lp) < arry.lp_now:
+        if len(arry.lp) + len(arry.pre_lp) < arry.lp_now:
             await start_lp(message.chat.id, state)
             return
         else:
@@ -333,10 +340,10 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await message.answer("Действие не закончено")
             return
     if message.text == 'add' and message.chat.id in arry.person:
-        await message.answer("Перешли сообщение нового админа.", reply_markup=keyb1(["↩️ Назад"]))
+        await message.answer("Перешли сообщение нового админа.", reply_markup=keyb_back)
         await States.new_admin.set()
     elif message.text == 'remove' and message.chat.id in arry.person:
-        await message.answer("Перешли сообщение, кого нужно удалить из админов.", reply_markup=keyb1(["↩️ Назад"]))
+        await message.answer("Перешли сообщение, кого нужно удалить из админов.", reply_markup=keyb_back)
         await States.remove_admin.set()
     elif message.text == 'Зaкрыл(-а) чаты':
         arry.buf_op[message.chat.id].ready = False
@@ -348,13 +355,8 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
     elif message.text == 'Дoсрочно выйти с ЛП':
         arry.buf_op[message.chat.id].ready = False
         arry.lp.remove(message.chat.id)
-        if message.chat.id in arry.person:
-            await message.answer("Окей, ЛП закончился, выходи в чаты.",
-                                 reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?", "Статистика",
-                                                     "Кто сейчас?", "Изменить количество ЛП"]))
-        else:
-            await message.answer("Окей, ЛП закончился, выходи в чаты.",
-                                 reply_markup=keyb1(["Встать в очередь", "Сколько в очeреди?"]))
+        keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+        await message.answer("Окей, ЛП закончился, выходи в чаты.", reply_markup=keyb)
         arry.buf_op[message.chat.id].chat = datetime.now().strftime("%H:%M:%S")
         arry.buf_op[message.chat.id].date = datetime.now().date()
         if len(arry.day_oper[0]) >= 1:
@@ -380,16 +382,10 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             if arry.queu[i] == message.chat.id:
                 await message.answer(f'Твое место в очереди: {i + 1}')
     elif message.text == "Выйти из очeреди":
-        if message.chat.id in arry.person:
-            await message.answer("Ты вышел(-ла) из очереди.", reply_markup=keyb1(["Встать в очередь",
-                                                                                  "Сколько в очeреди?", "Статистика",
-                                                                                  "Кто сейчас?",
-                                                                                  "Изменить количество ЛП"]))
-        else:
-            await message.answer("Ты вышел(-ла) из очереди.", reply_markup=keyb1(["Встать в очередь",
-                                                                                  "Сколько в очeреди?"]))
+        keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+        await message.answer("Ты вышел(-ла) из очереди.", reply_markup=keyb)
         arry.queu.remove(message.chat.id)
-        #del arry.buf_op[message.chat.id]
+        del arry.buf_op[message.chat.id]
     elif message.text == "Статистика":
         if message.chat.id in arry.person:
             await message.answer('За какой день нужна статистика?',
@@ -406,8 +402,14 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
     elif message.text == "Изменить количество ЛП":
         if message.chat.id in arry.person:
             await message.answer(f'Сейчас {arry.lp_now} лп. Введи корректное количество одновременных ЛП :)',
-                                 reply_markup=keyb1(["↩️ Назад"]))
+                                 reply_markup=keyb_back)
             await States.set_lp.set()
+        else:
+            await message.answer("I don't understand you.")
+    elif message.text == "Техническое":
+        if message.chat.id in arry.person:
+            await message.answer("Перезапустить?", reply_markup=keyb1(['Да', "↩️ Назад"]))
+            await States.tech.set()
         else:
             await message.answer("I don't understand you.")
     else:
