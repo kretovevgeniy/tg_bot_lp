@@ -23,6 +23,9 @@ class States(StatesGroup):
     op_statistic = State()
     set_lp = State()
     tech = State()
+    rename_1 = State()
+    rename_2 = State()
+    rename_3 = State()
 
 
 @dp.message_handler(commands=['start'])
@@ -35,7 +38,7 @@ async def start(message: types.Message):
 @dp.message_handler(state=States.waiting_fio)
 async def set_fio(message: types.Message, state: FSMContext):
     name = message.text
-    arry.que_name_id[message.chat.id] = name
+    arry.que_name_id[str(message.chat.id)] = name
     keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
     await message.answer(f'Приятно познакомиться, {name} :)\nТеперь ты можешь пользоваться моим функционалом.',
                          reply_markup=keyb)
@@ -97,7 +100,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
 
     async def send(i):
         text = f'ФИО: {i.fio} \nДата: {i.date}\nВстал в очередь в {i.que} \nВышел в перед обедом в {i.pre_start} ' \
-               f'\nВышел в ЛП в {i.start} \nВернулся в чаты в {i.chat}'
+               f'\nВышел в ЛП в {i.start} \nВернулся в чаты в {i.chat} \nUsername: {i.username}'
         await message.answer(text)
 
     async def send_2():
@@ -320,6 +323,46 @@ async def restart(message: types.Message, state: FSMContext):
     print("RESTART BOT")
 
 
+@dp.message_handler(state=States.rename_1)
+async def rename_1(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    await message.answer("Список ОП с именами:")
+    for i in arry.que_name_id:
+        await message.answer(f"\nID: {i}, имя: {arry.que_name_id[i]}")
+    await message.answer("Напиши, пожалуйста, ID оп, которого нужно переименовать", reply_markup=keyb_back)
+    await state.finish()
+    await States.rename_2.set()
+
+
+@dp.message_handler(state=States.rename_2)
+async def rename_2(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    print(arry.que_name_id)
+    if str(message.text) in arry.que_name_id:
+        arry.rename_id = arry.que_name_id[message.text]
+        await message.answer("Отлично! Теперь напиши его новое имя")
+        await state.finish()
+        await States.rename_3.set()
+    else:
+        await message.answer("К сожалению, не нашел такого оператора. Проверь, пожалуйста, правильность ID и отправь "
+                             "еще раз :)", reply_markup=keyb_back)
+
+
+@dp.message_handler(state=States.rename_3)
+async def rename_3(message: types.Message, state: FSMContext):
+    arry.que_name_id[arry.rename_id] = message.text
+    await message.answer(f"Готово! Теперь у оператора {arry.rename_id} имя {message.text}")
+    arry.rename_id = 0
+    await state.finish()
+    await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+
+
 @dp.message_handler()
 async def queue_on(message: types.Message, state: FSMContext):  # нужно разобрать этот метод и сделать адреса
     if message.text == "Встать в очередь":
@@ -328,7 +371,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await States.waiting_fio.set()
             return
         arry.buf_op[message.chat.id] = oper.Oper(arry.que_name_id[message.chat.id], message.chat.id,
-                                                 datetime.now().strftime("%H:%M:%S"))
+                                                 datetime.now().strftime("%H:%M:%S"), username='@'+message.chat.username)
         arry.buf_op[message.chat.id].ready = False
         arry.queu.append(message.chat.id)
 
@@ -417,6 +460,10 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await States.tech.set()
         else:
             await message.answer("I don't understand you.")
+    elif message.text == "Переименовать ОП":
+        if message.chat.id in arry.person:
+            await message.answer("Действительно хочешь переименовать оператора?", reply_markup=keyb1(['Да', "↩️ Назад"]))
+            await States.rename_1.set()
     else:
         await message.answer("I don't understand you.")
     return
