@@ -4,6 +4,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
+from aiogram.utils.exceptions import NetworkError
 from datetime import datetime
 import arry
 import oper
@@ -30,6 +31,9 @@ class States(StatesGroup):
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
+    if str(message.chat.id) in arry.que_name_id.keys():
+        print(f"попытка start. ID {message.chat.id}")
+        return
     await message.answer(f'Привет, {message.from_user.first_name}! Это бот по ЛП. Напиши, пожалуйста одним сообщением '
                          f'свою реальную фамилию и реальное имя.', reply_markup=types.ReplyKeyboardRemove())
     await States.waiting_fio.set()
@@ -122,7 +126,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
             await state.finish()
             return
     else:
-        fio = message.text
+        fio = message.text.lower()
     if id == 0 and fio == "None":
         for i in arry.day_oper[j]:
             await send(i)
@@ -134,7 +138,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
         await send_2()
     elif fio != "None":
         for i in arry.day_oper[j]:
-            if fio in i.fio:
+            if fio in i.fio.lower():
                 await send(i)
         await send_2()
     await state.finish()
@@ -142,31 +146,45 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
 
 async def pre_lp(chat_id):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(100)
-    if chat_id in arry.pre_lp:
-        arry.buf_op[chat_id].ready = False
-        await bot.send_message(chat_id, "Эгегей, надеюсь, чаты уже закрыты, пошло время ЛП.",
-                               reply_markup=keyb1(["Дoсрочно выйти с ЛП"]))
-        arry.buf_op[chat_id].start = datetime.now().strftime("%H:%M:%S")
+    await asyncio.sleep(10)
+    while True:
+        try:
+            if chat_id in arry.pre_lp:
+                arry.buf_op[chat_id].ready = False
+                await bot.send_message(chat_id, "Эгегей, надеюсь, чаты уже закрыты, пошло время ЛП.",
+                                       reply_markup=keyb1(["Дoсрочно выйти с ЛП"]))
+                arry.buf_op[chat_id].start = datetime.now().strftime("%H:%M:%S")
+            break
+        except NetworkError:
+            await asyncio.sleep(5)
+            print('обработка исключения pre_lp')
+
+
 
 
 async def lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].ready = True
     await asyncio.sleep(20)
-    if chat_id in arry.lp:
-        arry.buf_op[chat_id].ready = False
-        arry.lp.remove(chat_id)
-        keyb = keyb_admin if chat_id in arry.person else keyb_standart
-        await bot.send_message(chat_id, "ЛП закончился, выходи в чаты.", reply_markup=keyb)
-        arry.buf_op[chat_id].chat = datetime.now().strftime("%H:%M:%S")
-        arry.buf_op[chat_id].date = datetime.now().date()
-        if len(arry.day_oper[0]) > 0:
-            if arry.day_oper[0][0].date != datetime.now().date():
-                day_stat()
-        arry.day_oper[0].append(arry.buf_op[chat_id])
-        del arry.buf_op[chat_id]
-        if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
-            await start_lp(arry.queu[0], state)
+    while True:
+        try:
+            if chat_id in arry.lp:
+                arry.buf_op[chat_id].ready = False
+                keyb = keyb_admin if chat_id in arry.person else keyb_standart
+                await bot.send_message(chat_id, "ЛП закончился, выходи в чаты.", reply_markup=keyb)
+                arry.lp.remove(chat_id)
+                arry.buf_op[chat_id].chat = datetime.now().strftime("%H:%M:%S")
+                arry.buf_op[chat_id].date = datetime.now().date()
+                if len(arry.day_oper[0]) > 0:
+                    if arry.day_oper[0][0].date != datetime.now().date():
+                        day_stat()
+                arry.day_oper[0].append(arry.buf_op[chat_id])
+                del arry.buf_op[chat_id]
+                if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
+                    await start_lp(arry.queu[0], state)
+            break
+        except NetworkError:
+            await asyncio.sleep(5)
+            print('обработка исключения lp')
 
 
 async def start_lp(chat_id, state: FSMContext):
@@ -304,17 +322,17 @@ async def restart(message: types.Message, state: FSMContext):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
-            print(f"В очереди был: {arry.que_name_id[arry.queu[i]]}")
+            print(f"В очереди был: {arry.que_name_id[str(arry.queu[i])]}")
         if (i < len(arry.pre_lp)):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за неудобство',
                                    reply_markup=keyb)
-            print(f"В перед ЛП был: {arry.que_name_id[arry.pre_lp[i]]}")
+            print(f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
         if (i < len(arry.lp)):
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
-            print(f"В ЛП был: {arry.que_name_id[arry.lp[i]]}")
+            print(f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
     arry.queu = []
     arry.pre_lp = []
     arry.lp = []
@@ -343,9 +361,8 @@ async def rename_2(message: types.Message, state: FSMContext):
         await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
         await state.finish()
         return
-    print(arry.que_name_id)
-    if str(message.text) in arry.que_name_id:
-        arry.rename_id = arry.que_name_id[message.text]
+    if str(message.text) in arry.que_name_id.keys():
+        arry.rename_id = message.text
         await message.answer("Отлично! Теперь напиши его новое имя")
         await state.finish()
         await States.rename_3.set()
@@ -366,11 +383,11 @@ async def rename_3(message: types.Message, state: FSMContext):
 @dp.message_handler()
 async def queue_on(message: types.Message, state: FSMContext):  # нужно разобрать этот метод и сделать адреса
     if message.text == "Встать в очередь":
-        if arry.que_name_id.get(message.chat.id) is None:
+        if arry.que_name_id.get(str(message.chat.id)) is None:
             await message.answer("К сожалению, я не знаю твоего имени и фамилии. Введи их в ответном сообщении.")
             await States.waiting_fio.set()
             return
-        arry.buf_op[message.chat.id] = oper.Oper(arry.que_name_id[message.chat.id], message.chat.id,
+        arry.buf_op[message.chat.id] = oper.Oper(arry.que_name_id[str(message.chat.id)], message.chat.id,
                                                  datetime.now().strftime("%H:%M:%S"), username='@'+message.chat.username)
         arry.buf_op[message.chat.id].ready = False
         arry.queu.append(message.chat.id)
@@ -394,27 +411,42 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
         await message.answer("Перешли сообщение, кого нужно удалить из админов.", reply_markup=keyb_back)
         await States.remove_admin.set()
     elif message.text == 'Зaкрыл(-а) чаты':
-        arry.buf_op[message.chat.id].ready = False
-        arry.pre_lp.remove(message.chat.id)
-        await message.answer("Отлично! Выходи в ЛП", reply_markup=keyb1(["Дoсрочно выйти с ЛП"]))
-        arry.buf_op[message.chat.id].start = datetime.now().strftime("%H:%M:%S")
-        arry.lp.append(message.chat.id)
-        await lp(message.chat.id, state)
+        try:
+            arry.buf_op[message.chat.id].ready = False
+            arry.pre_lp.remove(message.chat.id)
+            arry.buf_op[message.chat.id].start = datetime.now().strftime("%H:%M:%S")
+            await message.answer("Отлично! Выходи в ЛП", reply_markup=keyb1(["Дoсрочно выйти с ЛП"]))
+            arry.lp.append(message.chat.id)
+            await lp(message.chat.id, state)
+        except ValueError:
+            print(f"Ошибка. Вызов \"Закрыл чаты\" оператором {message.chat.id}")
+            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+            await message.answer("Этой кнопки у тебя не должно быть, так как тебя и не было в перед ЛП. Если это "
+                                 "ошибка, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh "
+                                 "\nЧем могу помочь?", reply_markup=keyb)
+        finally:
+            return
     elif message.text == 'Дoсрочно выйти с ЛП':
-        arry.buf_op[message.chat.id].ready = False
-        arry.lp.remove(message.chat.id)
         keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
-        await message.answer("Окей, ЛП закончился, выходи в чаты.", reply_markup=keyb)
-        arry.buf_op[message.chat.id].chat = datetime.now().strftime("%H:%M:%S")
-        arry.buf_op[message.chat.id].date = datetime.now().date()
-        if len(arry.day_oper[0]) >= 1:
-            if arry.day_oper[0][0].date != datetime.now().date():
-                day_stat()
-        arry.day_oper[0].append(arry.buf_op[message.chat.id])
-        del arry.buf_op[message.chat.id]
-        if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
-            await start_lp(arry.queu[0], state)
-        else:
+        try:
+            arry.buf_op[message.chat.id].ready = False
+            arry.lp.remove(message.chat.id)
+            await message.answer("Окей, ЛП закончился, выходи в чаты.", reply_markup=keyb)
+            arry.buf_op[message.chat.id].chat = datetime.now().strftime("%H:%M:%S")
+            arry.buf_op[message.chat.id].date = datetime.now().date()
+            if len(arry.day_oper[0]) >= 1:
+                if arry.day_oper[0][0].date != datetime.now().date():
+                    day_stat()
+            arry.day_oper[0].append(arry.buf_op[message.chat.id])
+            del arry.buf_op[message.chat.id]
+            if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
+                await start_lp(arry.queu[0], state)
+        except ValueError:
+            print(f"Ошибка. Вызов \"Досрочно выйти с ЛП\" оператором {message.chat.id}")
+            await message.answer("Этой кнопки у тебя не должно быть, так как тебя и не было в ЛП. Если это "
+                                 "ошибка, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh "
+                                 "\nЧем могу помочь?", reply_markup=keyb)
+        finally:
             return
     elif message.text == "Сколько в очeреди?":
         if len(arry.queu) == 0:
@@ -431,9 +463,17 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
                 await message.answer(f'Твое место в очереди: {i + 1}')
     elif message.text == "Выйти из очeреди":
         keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
-        await message.answer("Ты вышел(-ла) из очереди.", reply_markup=keyb)
-        arry.queu.remove(message.chat.id)
-        del arry.buf_op[message.chat.id]
+        try:
+            await message.answer("Ты вышел(-ла) из очереди.", reply_markup=keyb)
+            arry.queu.remove(message.chat.id)
+            del arry.buf_op[message.chat.id]
+        except ValueError:
+            print(f"Ошибка. Вызов \"Выйти из очереди\" оператором {message.chat.id}")
+            await message.answer("Этой кнопки у тебя не должно быть, так как тебя и не было в очереди. Если это "
+                                 "ошибка делай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh "
+                                 "\nЧем могу помочь?", reply_markup=keyb)
+        finally:
+            return
     elif message.text == "Статистика":
         if message.chat.id in arry.person:
             await message.answer('За какой день нужна статистика?',
@@ -454,7 +494,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await States.set_lp.set()
         else:
             await message.answer("I don't understand you.")
-    elif message.text == "Техническое":
+    elif message.text == "Перезапуск бота":
         if message.chat.id in arry.person:
             await message.answer("Перезапустить?", reply_markup=keyb1(['Да', "↩️ Назад"]))
             await States.tech.set()
