@@ -24,9 +24,11 @@ class States(StatesGroup):
     op_statistic = State()
     set_lp = State()
     tech = State()
+    restart_bot = State()
     rename_1 = State()
     rename_2 = State()
     rename_3 = State()
+    new_name = State()
 
 
 @dp.message_handler(commands=['start'])
@@ -146,7 +148,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
 
 async def pre_lp(chat_id):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(10)
+    await asyncio.sleep(100)
     while True:
         try:
             if chat_id in arry.pre_lp:
@@ -158,8 +160,6 @@ async def pre_lp(chat_id):
         except NetworkError:
             await asyncio.sleep(5)
             print('обработка исключения pre_lp')
-
-
 
 
 async def lp(chat_id, state: FSMContext):
@@ -310,29 +310,66 @@ async def test2(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=States.tech)
+async def restart_global(message: types.Message, state: FSMContext):
+    await state.finish()
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        return
+    if message.text == "Перезапустить бота целиком":
+        await message.answer("Точно перезапустить бота?", reply_markup=keyb1(['Да, перезапустить бота', "↩️ Назад"]))
+        await States.restart_bot.set()
+        return
+    if message.text == "Обнулить очередь":
+        await message.answer("Точно обнулить очередь?", reply_markup=keyb1(['Да, обнулить очередь', "↩️ Назад"]))
+        await States.restart_bot.set()
+        return
+
+
+@dp.message_handler(state=States.restart_bot)
 async def restart(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
         await state.finish()
         return
-    iter = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
-    arry.buf_op = {}
-    for i in range(iter):
-        if (i < len(arry.queu)):
-            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
+
+    async def null_que():
+        try:
+            keyb = keyb_admin if arry.queu[i] in arry.person else keyb_standart
             await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
             print(f"В очереди был: {arry.que_name_id[str(arry.queu[i])]}")
-        if (i < len(arry.pre_lp)):
-            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
-            await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за неудобство',
-                                   reply_markup=keyb)
-            print(f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
-        if (i < len(arry.lp)):
-            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
-            await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
-                                                 'неудобство', reply_markup=keyb)
-            print(f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
+        except ValueError:
+            print("Был перебор")
+
+    if message.text == "Да, обнулить очередь":
+        for i in range(len(arry.queu)):
+            await null_que()
+        print("NULL QUE")
+        await message.answer("Очередь обнулена. Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+
+    iter = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
+    arry.buf_op = {}
+    for i in range(iter):
+        if i < len(arry.queu):
+            await null_que()
+        if i < len(arry.pre_lp):
+            try:
+                keyb = keyb_admin if arry.pre_lp[i] in arry.person else keyb_standart
+                await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за '
+                                                       'неудобство', reply_markup=keyb)
+                print(f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
+            except ValueError:
+                print("Был перебор")
+        if i < len(arry.lp):
+            try:
+                keyb = keyb_admin if arry.lp[i] in arry.person else keyb_standart
+                await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
+                                                   'неудобство', reply_markup=keyb)
+                print(f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
+            except ValueError:
+                print("Был перебор")
     arry.queu = []
     arry.pre_lp = []
     arry.lp = []
@@ -380,6 +417,27 @@ async def rename_3(message: types.Message, state: FSMContext):
     await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
 
 
+@dp.message_handler(state=States.new_name)
+async def new_name(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await state.finish()
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        return
+    tg_id = []
+    op_name = []
+    for i in message.text[4:]:
+        if i == ',':
+            break
+        tg_id.append(i)
+    for i in message.text[len(tg_id)+11:]:
+        op_name.append(i)
+    str_id = str(''.join(map(str, tg_id)))
+    str_name = str(''.join(map(str, op_name)))
+    arry.que_name_id[str_id] = str_name
+    print(arry.que_name_id)
+    await message.answer(f"Оператору {str_id} присвоено имя {str_name}")
+
+
 @dp.message_handler()
 async def queue_on(message: types.Message, state: FSMContext):  # нужно разобрать этот метод и сделать адреса
     if message.text == "Встать в очередь":
@@ -387,8 +445,12 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await message.answer("К сожалению, я не знаю твоего имени и фамилии. Введи их в ответном сообщении.")
             await States.waiting_fio.set()
             return
+        print(arry.buf_op.keys())
+        print(message.chat.id)
+        assert message.chat.id not in arry.buf_op.keys()
         arry.buf_op[message.chat.id] = oper.Oper(arry.que_name_id[str(message.chat.id)], message.chat.id,
-                                                 datetime.now().strftime("%H:%M:%S"), username='@'+message.chat.username)
+                                                 datetime.now().strftime("%H:%M:%S"),
+                                                 username='@' + message.chat.username)
         arry.buf_op[message.chat.id].ready = False
         arry.queu.append(message.chat.id)
 
@@ -407,6 +469,9 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
     if message.text == 'add' and message.chat.id in arry.person:
         await message.answer("Перешли сообщение нового админа.", reply_markup=keyb_back)
         await States.new_admin.set()
+    elif message.text == 'new_name' and message.chat.id in arry.person:
+        await message.answer("Перешли сообщение с именем ОП.", reply_markup=keyb_back)
+        await States.new_name.set()
     elif message.text == 'remove' and message.chat.id in arry.person:
         await message.answer("Перешли сообщение, кого нужно удалить из админов.", reply_markup=keyb_back)
         await States.remove_admin.set()
@@ -496,13 +561,15 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await message.answer("I don't understand you.")
     elif message.text == "Перезапуск бота":
         if message.chat.id in arry.person:
-            await message.answer("Перезапустить?", reply_markup=keyb1(['Да', "↩️ Назад"]))
+            await message.answer("Перезапустить?", reply_markup=keyb1(['Перезапустить бота целиком', "Обнулить очередь",
+                                                                       "↩️ Назад"]))
             await States.tech.set()
         else:
             await message.answer("I don't understand you.")
     elif message.text == "Переименовать ОП":
         if message.chat.id in arry.person:
-            await message.answer("Действительно хочешь переименовать оператора?", reply_markup=keyb1(['Да', "↩️ Назад"]))
+            await message.answer("Действительно хочешь переименовать оператора?",
+                                 reply_markup=keyb1(['Да', "↩️ Назад"]))
             await States.rename_1.set()
     else:
         await message.answer("I don't understand you.")
