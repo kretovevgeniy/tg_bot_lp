@@ -1,3 +1,5 @@
+# ЗАДАЧИ: придумать, как передавать id правил между методами и сделать увеличение лимита на 2 и более
+
 import asyncio
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -190,7 +192,7 @@ async def lp(chat_id, state: FSMContext):
 
 
 async def start_lp(chat_id, state: FSMContext):
-    arry.buf_op[chat_id].pre_start = datetime.now()         #.strftime("%H:%M:%S")
+    arry.buf_op[chat_id].pre_start = datetime.now()  # .strftime("%H:%M:%S")
     text = "Оказывается, очередь как раз скоро подойдет! Выходи в \"перед обедом\"и закрывай чаты :)"
     await bot.send_message(chat_id, text, reply_markup=keyb1(["Зaкрыл(-а) чаты"]))
     arry.queu.remove(chat_id)
@@ -439,7 +441,7 @@ async def new_name(message: types.Message, state: FSMContext):
     await message.answer(f"Оператору {str_id} присвоено имя {str_name}")
 
 
-async def rules(message: types.Message, state: FSMContext):
+async def rules_start(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await state.finish()
         await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
@@ -451,12 +453,99 @@ async def rules(message: types.Message, state: FSMContext):
         for i in arry.rules_all:
             await message.answer(i)
         rules_for_keyb = arry.rules_all
+        rules_for_keyb.append('Создать новое')
         rules_for_keyb.append('↩️ Назад')
         await message.answer(f"Ты можешь исправить любое правило из представленных либо создать новое",
                              reply_markup=keyb1(arry.rules_all))
 
 
+async def rules_2(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    if message.text == 'Создать' or message.text == 'Создать новое':
+        await message.answer("Напиши в ответном сообщении время старта правила?", reply_markup=keyb_back)
+        arry.buf_rule = oper.Rules(len(arry.rules_all))
+        await state.finish()
+        await States.rules_time_start.set()
+        return
+    elif message.text in arry.rules_all:
+        await message.answer("Напиши в ответном сообщении время старта правила?", reply_markup=keyb_back)
+        await state.finish()
+        await States.rules_time_start.set()  # или мб другой state
+        return
+    else:
+        await message.answer("Ошибка, я не понял :( \nНажми на кнопку, пожалуйста.")
 
+
+async def rules_time_start(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    if 0 <= int(message.text) <= 23:
+        arry.buf_rule.start = int(message.text)
+        await message.answer(f"Хорошо, час старта правила: {message.text}\nВведи, пожалуйста, время окончания правила",
+                             reply_markup=keyb_back)
+        await state.finish()
+        await States.rules_time_finish.set()
+    else:
+        await message.answer(f"К сожалению, твое сообщение не похоже на час. Введи еще раз, пожалуйста",
+                             reply_markup=keyb_back)
+
+
+async def rules_time_finish(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    if 0 <= int(message.text) <= 23:
+        arry.buf_rule.finish = int(message.text)
+        await message.answer(f"Хорошо, час окончания правила: {message.text}\nВведи, пожалуйста, лимит для этого правила",
+                             reply_markup=keyb_back)
+        await state.finish()
+        await States.rules_limit.set()
+    else:
+        await message.answer(f"К сожалению, твое сообщение не похоже на час. Введи еще раз, пожалуйста",
+                             reply_markup=keyb_back)
+
+
+async def rules_limit(message: types.Message, state: FSMContext):
+    if message.text == "↩️ Назад":
+        await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        return
+    if int(message.text) >= 1:
+        await state.finish()
+        arry.buf_rule.limit = int(message.text)
+        await message.answer(f"Хорошо, лимит правила: {message.text}\nТвое правило:\nЛимит {arry.buf_rule.limit} с "
+                             f"{arry.buf_rule.start} по {arry.buf_rule.finish} часов.")
+        arry.rules_all.append(arry.buf_rule)
+        if arry.buf_rule.start <= datetime.now().hour <= arry.buf_rule.finish:
+            await message.answer(f"Запустить правило прямо сейчас или со следующего раза?",
+                                 reply_markup=keyb1(['Запустить сейчас', 'Запустить потом']))
+            await States.rules_start_now.set()
+        else:
+            await message.answer(f"Правило запустится, как придет его время :) \nЧем еще могу помочь?",
+                                 reply_markup=keyb_admin)
+        arry.buf_rule = None
+    else:
+        await message.answer(f"К сожалению, твое сообщение не похоже на лимит. Введи еще раз, пожалуйста",
+                             reply_markup=keyb_back)
+
+
+async def rules_start_now(message: types.Message, state: FSMContext): # нужно как-то передавать id правила, чтобы не было дрочи
+    if message.text == "Запустить сейчас":
+        arry.rules_now.append(arry.rules_all[len(arry.rules_all)])
+        await message.answer("Окей, правило запущено. Чем еще могу помочь?", reply_markup=keyb_admin)
+        await state.finish()
+        old_lp = arry.lp_now
+        arry.lp_now = arry.rules_all[len(arry.rules_all)].limit
+        if arry.rules_all[len(arry.rules_all)].limit > old_lp: # притом разница должна быть только на
+            await start_lp(arry.queu[0], state)
+    elif message.text == "Запустить потом":
+        await message.answer("Окей, запустим потом. Чем еще могу помочь?", reply_markup=keyb_admin)
 
 
 @dp.message_handler()
