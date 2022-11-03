@@ -14,7 +14,7 @@ from keyb import keyb1, keyb_standart, keyb_admin, keyb_back
 
 # Бот2 900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM
 # happy kz 5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs
-bot = Bot(token='900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM')
+bot = Bot(token='5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs')
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 
@@ -42,7 +42,7 @@ class States(StatesGroup):
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     if str(message.chat.id) in arry.que_name_id.keys():
-        print(f"попытка start. ID {message.chat.id}")
+        await bot.send_message(292075774, f"попытка start. ID {message.chat.id}")
         return
     await message.answer(f'Привет, {message.from_user.first_name}! Это бот по ЛП. Напиши, пожалуйста одним сообщением '
                          f'свою реальную фамилию и реальное имя.', reply_markup=types.ReplyKeyboardRemove())
@@ -156,7 +156,7 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
 
 async def pre_lp(chat_id):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(100)
+    await asyncio.sleep(360)
     while True:
         try:
             if chat_id in arry.pre_lp:
@@ -167,12 +167,12 @@ async def pre_lp(chat_id):
             break
         except NetworkError:
             await asyncio.sleep(5)
-            print('обработка исключения pre_lp')
+            print('try pre_lp 5 sec')
 
 
 async def lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(20)
+    await asyncio.sleep(600)
     while True:
         try:
             if chat_id in arry.lp:
@@ -194,7 +194,7 @@ async def lp(chat_id, state: FSMContext):
             break
         except NetworkError:
             await asyncio.sleep(5)
-            print('обработка исключения lp')
+            print('try lp 5 sec')
 
 
 async def start_lp(chat_id, state: FSMContext):
@@ -360,9 +360,9 @@ async def restart(message: types.Message, state: FSMContext):
             keyb = keyb_admin if arry.queu[i] in arry.person else keyb_standart
             await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                  'неудобство', reply_markup=keyb)
-            print(f"В очереди был: {arry.que_name_id[str(arry.queu[i])]}")
+            await bot.send_message(292075774, f"В очереди был: {arry.que_name_id[str(arry.queu[i])]}")
         except ValueError:
-            print("Был перебор")
+            await bot.send_message(292075774, "Был перебор")
 
     if message.text == "Да, обнулить очередь":
         for i in range(len(arry.queu)):
@@ -382,17 +382,17 @@ async def restart(message: types.Message, state: FSMContext):
                 keyb = keyb_admin if arry.pre_lp[i] in arry.person else keyb_standart
                 await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за '
                                                        'неудобство', reply_markup=keyb)
-                print(f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
+                await bot.send_message(292075774, f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
             except ValueError:
-                print("Был перебор")
+                await bot.send_message(292075774, "Был перебор")
         if i < len(arry.lp):
             try:
                 keyb = keyb_admin if arry.lp[i] in arry.person else keyb_standart
                 await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
                                                    'неудобство', reply_markup=keyb)
-                print(f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
+                await bot.send_message(292075774, f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
             except ValueError:
-                print("Был перебор")
+                await bot.send_message(292075774, "Был перебор")
     arry.queu = []
     arry.pre_lp = []
     arry.lp = []
@@ -672,7 +672,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             arry.lp.append(message.chat.id)
             await lp(message.chat.id, state)
         except:
-            print(f"Ошибка. Вызов \"Закрыл чаты\" оператором {message.chat.id}")
+            await bot.send_message(292075774, f"Ошибка. Вызов \"Закрыл чаты\" оператором {message.chat.id}")
             keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await message.answer("Ошибка! Этой кнопки у тебя не должно быть, так как тебя и не было в перед ЛП. Если "
                                  "это не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh"
@@ -697,7 +697,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
                 await start_lp(arry.queu[0], state)
         except:
-            print(f"Ошибка. Вызов \"Досрочно выйти с ЛП\" оператором {message.chat.id}")
+            await bot.send_message(292075774, f"Ошибка. Вызов \"Досрочно выйти с ЛП\" оператором {message.chat.id}")
             await message.answer("Ошибка! Этой кнопки у тебя не должно быть, так как тебя и не было в ЛП. Если это "
                                  "не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh"
                                  "\nЧем могу помочь?", reply_markup=keyb)
@@ -723,7 +723,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             arry.queu.remove(message.chat.id)
             del arry.buf_op[message.chat.id]
         except ValueError:
-            print(f"Ошибка. Вызов \"Выйти из очереди\" оператором {message.chat.id}")
+            await bot.send_message(292075774, f"Ошибка. Вызов \"Выйти из очереди\" оператором {message.chat.id}")
             await message.answer("Ошибка! Этой кнопки у тебя не должно быть, так как тебя и не было в очереди. Если это"
                                  " не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh "
                                  "\nЧем могу помочь?", reply_markup=keyb)
