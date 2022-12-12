@@ -11,6 +11,10 @@ class Oper:
         self.username = username  # username в тг
         self.ready = ready  # готов ли для общения с ботом далее (выполнилось ли предыдуще действие)
 
+    def to_mass_for_sql(self):
+        return [self.fio, self.chat_id, self.que, self.pre_start, self.start, self.chat, self.date, self.username,
+                self.ready]
+
 
 class Rules:
     def __init__(self, id_, start=-1, finish=-1, limit=0):

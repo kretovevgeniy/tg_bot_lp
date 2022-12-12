@@ -1,5 +1,5 @@
 # ЗАДАЧИ: придумать, как передавать id правил между методами и сделать увеличение лимита на 2 и более
-
+import sqlite3
 import asyncio
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -10,11 +10,12 @@ from aiogram.utils.exceptions import NetworkError
 from datetime import datetime, timedelta
 import arry
 import oper
-from keyb import keyb1, keyb_standart, keyb_admin, keyb_back
+from keyb import keyb1, keyb2, keyb_standart, keyb_admin, keyb_back
+import make_calendar
 
 # Бот2 900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM
 # happy kz 5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs
-bot = Bot(token='5589930594:AAGMOYcTTYFA1etzKdihcyM9-H2yQfegHTs')
+bot = Bot(token='900114919:AAFPw4KkBeit5Sa4FCO2sE5z-6sSAqPMcNM')
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 
@@ -39,9 +40,87 @@ class States(StatesGroup):
     rules_limit = State()
 
 
+def db():
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    # cur.execute('DROP TABLE test2')
+    cur.execute('CREATE TABLE IF NOT EXISTS operators(fio TEXT, chat_id INTEGER, que TEXT, pre_start TEXT, start TEXT, '
+                'chat TEXT, date DATE, username TEXT, ready BOOLEAN)')
+    cur.execute(
+        'CREATE TABLE IF NOT EXISTS fio_id(id INTEGER PRIMARY KEY, Fio TEXT NOT NULL, chat_id INTEGER NOT NULL)')
+    cur.execute(
+        'CREATE TABLE IF NOT EXISTS admin(chat_id INTEGER NOT NULL)')
+
+
+def my_lower_sql(s):
+    return s.lower()
+
+
+async def db_in_fio(input_mass):
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    cur.execute(f'INSERT INTO fio_id(fio, chat_id) VALUES(?, ?)', input_mass)
+    con.commit()
+    cur.close()
+
+
+async def db_in_op(input_mass):
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    cur.execute(f'INSERT INTO operators(fio, chat_id, que, pre_start, start, chat, date, username, ready) '
+                f'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)', input_mass)
+    con.commit()
+    cur.close()
+
+
+async def db_in_admin(input_mass):
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    cur.execute(f'INSERT INTO admin(chat_id) VALUES(?)', input_mass)
+    con.commit()
+    cur.close()
+
+
+async def db_out(db_name, column="*", filter_sql=None, one_element=True):
+    con = sqlite3.connect("kz_lp.db")
+    con.create_function('my_lower', 1, my_lower_sql)
+    cur = con.cursor()
+    if filter_sql is None:
+        query = f'SELECT {column} FROM {db_name}'
+    else:
+        query = f'SELECT {column} FROM {db_name} WHERE {filter_sql}'
+    cur.execute(query)
+    data = cur.fetchone() if one_element else cur.fetchall()
+    con.commit()
+    cur.close()
+    return data
+
+
+async def db_upd(db_name, columns, new_data, filter_sql):
+    # example columns = 'fio = ? , chat_id = ? '
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    query = f'UPDATE {db_name} SET {columns} WHERE {filter_sql}'
+    cur.execute(query, new_data)
+    con.commit()
+    cur.close()
+
+
+async def db_del(db_name, filter_sql):
+    con = sqlite3.connect("kz_lp.db")
+    cur = con.cursor()
+    query = f'DELETE FROM {db_name} WHERE {filter_sql}'
+    cur.execute(query)
+    con.commit()
+    cur.close()
+
+
+# https://teletype.in/@codingcommunity/SyKLWZ154
+
+
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    if str(message.chat.id) in arry.que_name_id.keys():
+    if await db_out('fio_id', filter_sql=f'chat_id = {message.chat.id}') is not None:
         await bot.send_message(292075774, f"попытка start. ID {message.chat.id}")
         return
     await message.answer(f'Привет, {message.from_user.first_name}! Это бот по ЛП. Напиши, пожалуйста одним сообщением '
@@ -51,57 +130,21 @@ async def start(message: types.Message):
 
 @dp.message_handler(state=States.waiting_fio)
 async def set_fio(message: types.Message, state: FSMContext):
-    name = message.text
-    arry.que_name_id[str(message.chat.id)] = name
+    input_mass = [message.text, message.chat.id]
+    await db_in_fio(input_mass)
     keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
-    await message.answer(f'Приятно познакомиться, {name} :)\nТеперь ты можешь пользоваться моим функционалом.',
+    await message.answer(f'Приятно познакомиться, {message.text} :)\nТеперь ты можешь пользоваться моим функционалом.',
                          reply_markup=keyb)
     await state.finish()
 
 
-def day_stat():
-    arry.day_oper[6] = arry.day_oper[5].copy()
-    arry.day_oper[5] = arry.day_oper[4].copy()
-    arry.day_oper[4] = arry.day_oper[3].copy()
-    arry.day_oper[3] = arry.day_oper[2].copy()
-    arry.day_oper[2] = arry.day_oper[1].copy()
-    arry.day_oper[1] = arry.day_oper[0].copy()
-    arry.day_oper[0].clear()
-    return
-
-
-@dp.message_handler(state=States.main_statistic)
 async def main_statistic_1(message: types.Message, state: FSMContext):
-    if message.text == "↩️ Назад":
-        await message.answer("Чем могу помочь?",
-                             reply_markup=keyb_admin)
-        await state.finish()
-        return
-    i = 0
-    if message.text == 'Сегодня':
-        i = 0
-    elif message.text == 'Вчера':
-        i = 1
-    elif message.text == '2 дня назад':
-        i = 2
-    elif message.text == '3 дня назад':
-        i = 3
-    elif message.text == '4 дня назад':
-        i = 4
-    elif message.text == '5 дней назад':
-        i = 5
-    elif message.text == '6 дней назад':
-        i = 6
-    if len(arry.day_oper[i]) == 0:
-        await message.answer("Пусто :(", reply_markup=keyb_admin)
-        await state.finish()
-        return
-    await message.answer("Теперь перешли мне любое сообщение оператора, по которому хочешь узнать статистику, либо "
-                         "отправь мне его фамилию в ответном сообщении",
-                         reply_markup=keyb1(["Нужна статистика по всем операторам", "↩️ Назад"]))
-    arry.i = i
-    await state.finish()
-    await States.op_statistic.set()
+    make_calendar.create_inlineKM()
+    async with state.proxy() as data:
+        data['firstDateFull'] = None
+        data['chat_id'] = message.chat.id
+    await message.answer('За какой день нужна статистика?',
+                         reply_markup=make_calendar.inline_kb1)
 
 
 @dp.message_handler(state=States.op_statistic)
@@ -113,21 +156,34 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
         return
 
     async def send(i):
-        text = f'ФИО: {i.fio} \nДата: {i.date}\nВстал в очередь в {i.que} \nВышел в перед обедом в {i.pre_start} ' \
-               f'\nВышел в ЛП в {i.start} \nВернулся в чаты в {i.chat} \nUsername: {i.username}'
+        text = f'ФИО: {i[0]} \nДата: {i[6]}\nВстал в очередь в {i[2]} \nВышел в перед обедом в {i[3]} ' \
+               f'\nВышел в ЛП в {i[4]} \nВернулся в чаты в {i[5]} \nUsername: {i[7]}'
         await message.answer(text)
 
     async def send_2():
         await message.answer("Чем еще могу помочь? :)", reply_markup=keyb_admin)
 
-    j = arry.i
-    id = 0
-    fio = "None"
+    async with state.proxy() as data:
+        firstDateFull = data['firstDateFull']
+        firstDateCode = data['firstDateCode']
+        lastDateFull = data['lastDateFull']
+        lastDateCode = data['lastDateCode']
+    shift_days = int(lastDateCode) - int(firstDateCode)
+    dates = make_calendar.get_mass_dates(firstDateFull, lastDateFull, shift_days)
     if message.text == "Нужна статистика по всем операторам":
-        id = 0
+        result_mass_is_null = True
+        for date in dates:
+            res_mass = await db_out('operators', filter_sql=f'date = \'{str(date)}\'', one_element=False)
+            if len(res_mass) != 0:
+                result_mass_is_null = False
+            for operator in res_mass:
+                await send(operator)
+        if result_mass_is_null:
+            await message.answer("Записей нет :(")
+        await send_2()
     elif message.forward_date is not None:
         try:
-            id = message.forward_from.id
+            id_ = message.forward_from.id
         except:
             await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
                                  "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
@@ -135,28 +191,36 @@ async def main_statistic_2(message: types.Message, state: FSMContext):
                                  "сообщений\"", reply_markup=keyb_admin)
             await state.finish()
             return
+        result_mass_is_null = True
+        for date in dates:
+            res_mass = await db_out('operators', filter_sql=f'date = \'{str(date)}\' and chat_id = {id_}',
+                                    one_element=False)
+            if len(res_mass) != 0:
+                result_mass_is_null = False
+            for operator in res_mass:
+                await send(operator)
+        if result_mass_is_null:
+            await message.answer("Записей нет :(")
+        await send_2()
     else:
         fio = message.text.lower()
-    if id == 0 and fio == "None":
-        for i in arry.day_oper[j]:
-            await send(i)
-        await send_2()
-    elif id != 0:
-        for i in arry.day_oper[j]:
-            if i.chat_id == id:
-                await send(i)
-        await send_2()
-    elif fio != "None":
-        for i in arry.day_oper[j]:
-            if fio in i.fio.lower():
-                await send(i)
+        result_mass_is_null = True
+        for date in dates:
+            res_mass = await db_out('operators', filter_sql=f'date= \'{str(date)}\' AND my_lower(fio) LIKE \'%{fio}%\'',
+                                    one_element=False)
+            if len(res_mass) != 0:
+                result_mass_is_null = False
+            for operator in res_mass:
+                await send(operator)
+        if result_mass_is_null:
+            await message.answer("Записей нет :(")
         await send_2()
     await state.finish()
 
 
 async def pre_lp(chat_id):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(360)
+    await asyncio.sleep(5)
     while True:
         try:
             if chat_id in arry.pre_lp:
@@ -172,7 +236,7 @@ async def pre_lp(chat_id):
 
 async def lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].ready = True
-    await asyncio.sleep(600)
+    await asyncio.sleep(10)
     while True:
         try:
             if chat_id in arry.lp:
@@ -184,12 +248,9 @@ async def lp(chat_id, state: FSMContext):
                 arry.buf_op[chat_id].start = arry.buf_op[chat_id].start.strftime("%H:%M:%S")
                 arry.buf_op[chat_id].pre_start = arry.buf_op[chat_id].pre_start.strftime("%H:%M:%S")
                 arry.buf_op[chat_id].date = datetime.now().date()
-                if len(arry.day_oper[0]) > 0:
-                    if arry.day_oper[0][0].date != datetime.now().date():
-                        day_stat()
-                arry.day_oper[0].append(arry.buf_op[chat_id])
+                await db_in_op(oper.Oper.to_mass_for_sql(arry.buf_op[chat_id]))
                 del arry.buf_op[chat_id]
-                if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
+                if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) <= arry.lp_now - 1:
                     await start_lp(arry.queu[0], state)
             break
         except NetworkError:
@@ -199,7 +260,7 @@ async def lp(chat_id, state: FSMContext):
 
 async def start_lp(chat_id, state: FSMContext):
     arry.buf_op[chat_id].pre_start = datetime.now()
-    text = "Оказывается, очередь как раз скоро подойдет! Выходи в \"перед обедом\"и закрывай чаты :)"
+    text = "Оказывается, очередь как раз скоро подойдет! Выходи в \"перед обедом\" и закрывай чаты :)"
     await bot.send_message(chat_id, text, reply_markup=keyb1(["Зaкрыл(-а) чаты"]))
     arry.queu.remove(chat_id)
     arry.pre_lp.append(chat_id)
@@ -211,31 +272,31 @@ async def start_lp(chat_id, state: FSMContext):
 
 
 async def who_now(chat_id):
-    lp = arry.lp
-    pre_lp = arry.pre_lp
-    qu = arry.queu
-    if len(lp) > 0:
+    lp_mass = arry.lp
+    pre_lp_mass = arry.pre_lp
+    qu_mass = arry.queu
+    if len(lp_mass) > 0:
         lp_text = ""
-        for i in range(len(lp)):
-            a = datetime.now() - arry.buf_op[lp[i]].start
-            lp_text += f'\n{arry.buf_op[lp[i]].fio} {timedelta(seconds=int(a.total_seconds()))}'
+        for i in range(len(lp_mass)):
+            a = datetime.now() - arry.buf_op[lp_mass[i]].start
+            lp_text += f'\n{arry.buf_op[lp_mass[i]].fio} {timedelta(seconds=int(a.total_seconds()))}'
         lp_text1 = f'В ЛП: {lp_text}'
     else:
         lp_text1 = 'В ЛП никого'
     await bot.send_message(chat_id, lp_text1)
-    if len(pre_lp) > 0:
+    if len(pre_lp_mass) > 0:
         pre_lp_text = ""
-        for i in range(len(pre_lp)):
-            a = datetime.now() - arry.buf_op[pre_lp[i]].pre_start
-            pre_lp_text += f'\n{arry.buf_op[pre_lp[i]].fio} {timedelta(seconds=int(a.total_seconds()))}'
+        for i in range(len(pre_lp_mass)):
+            a = datetime.now() - arry.buf_op[pre_lp_mass[i]].pre_start
+            pre_lp_text += f'\n{arry.buf_op[pre_lp_mass[i]].fio} {timedelta(seconds=int(a.total_seconds()))}'
         pre_lp_text1 = f'В перед обедом: {pre_lp_text}'
     else:
         pre_lp_text1 = "В перед обедом никого"
     await bot.send_message(chat_id, pre_lp_text1)
-    if len(qu) > 0:
+    if len(qu_mass) > 0:
         qu_text = ""
-        for i in range(len(qu)):
-            qu_text += f'\n{arry.buf_op[qu[i]].fio} с {arry.buf_op[qu[i]].que}'
+        for i in range(len(qu_mass)):
+            qu_text += f'\n{arry.buf_op[qu_mass[i]].fio} с {arry.buf_op[qu_mass[i]].que}'
         qu_text1 = f'В очереди: {qu_text}'
     else:
         qu_text1 = "В очереди никого"
@@ -260,15 +321,17 @@ async def set_lp(message: types.Message, state: FSMContext):
         arry.lp_now += 1
         await message.answer(f'Количество одновременных ЛП изменилось. Новое значение: {arry.lp_now}',
                              reply_markup=keyb_admin)
-        arry.day_oper[0].append(oper.Oper(f'@{message.chat.username}', 0, old_lp, arry.lp_now,
-                                          datetime.now().strftime("%H:%M:%S"), date=datetime.now().date()))
+        op = oper.Oper(f'@{message.chat.username}', 0, old_lp, arry.lp_now, datetime.now().strftime("%H:%M:%S"),
+                       date=datetime.now().date())
+        await db_in_op(oper.Oper.to_mass_for_sql(op))
         await start_lp(arry.queu[0], state)
     elif message.text == 'Уменьшить на 1':
         arry.lp_now -= 1
         await message.answer(f'Количество одновременных ЛП изменилось. Новое значение: {arry.lp_now}',
                              reply_markup=keyb_admin)
-        arry.day_oper[0].append(oper.Oper(f'@{message.chat.username}', 0, old_lp, arry.lp_now,
-                                          datetime.now().strftime("%H:%M:%S"), date=datetime.now().date()))
+        op = oper.Oper(f'@{message.chat.username}', 0, old_lp, arry.lp_now, datetime.now().strftime("%H:%M:%S"),
+                       date=datetime.now().date())
+        await db_in_op(oper.Oper.to_mass_for_sql(op))
     '''
     elif int(message.text) > 0:
         new_lim = int(message.text)
@@ -281,14 +344,14 @@ async def set_lp(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=States.new_admin)
-async def test(message: types.Message, state: FSMContext):
+async def new_admin(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
                              reply_markup=keyb_admin)
         await state.finish()
         return
     try:
-        id = message.forward_from.id
+        id_tg = message.forward_from.id
     except:
         await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
                              "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
@@ -296,24 +359,25 @@ async def test(message: types.Message, state: FSMContext):
                              "сообщений\"", reply_markup=keyb_admin)
         await state.finish()
         return
-    arry.person.append(id)
+    arry.person.append(id_tg)
+    await db_in_admin([id_tg])
     await message.answer(f'Окей, теперь {message.forward_from.first_name} админ',
                          reply_markup=keyb_admin)
     await bot.send_message(292075774,
                            f'@{message.chat.username} добавил нового админа: @{message.forward_from.username}')
-    await bot.send_message(id, "Ты админ", reply_markup=keyb_admin)
+    await bot.send_message(id_tg, "Ты админ", reply_markup=keyb_admin)
     await state.finish()
 
 
 @dp.message_handler(state=States.remove_admin)
-async def test2(message: types.Message, state: FSMContext):
+async def remove_admin(message: types.Message, state: FSMContext):
     if message.text == "↩️ Назад":
         await message.answer("Чем могу помочь?",
                              reply_markup=keyb_admin)
         await state.finish()
         return
     try:
-        id = message.forward_from.id
+        id_tg = message.forward_from.id
     except:
         await message.answer("Не получается определить ID аккаунта. Скорее всего, настройки приватности оператора "
                              "не позволяют выяснить его ID. Попроси, пожалуйста, оператора внести этого бота в "
@@ -321,15 +385,16 @@ async def test2(message: types.Message, state: FSMContext):
                              "сообщений\"", reply_markup=keyb_admin)
         await state.finish()
         return
-    if id not in arry.person:
+    if id_tg not in arry.person:
         await state.finish()
         return
-    arry.person.remove(id)
+    arry.person.remove(id_tg)
+    await db_del('admin', f'chat_id = {id_tg}')
     await state.finish()
     await bot.send_message(message.chat.id, f'Окей, теперь {message.forward_from.first_name} не админ',
                            reply_markup=keyb_admin)
     await bot.send_message(292075774, f'@{message.chat.username} удалил админа: @{message.forward_from.username}')
-    await bot.send_message(id, "Ты не админ", reply_markup=keyb_standart)
+    await bot.send_message(id_tg, "Ты не админ", reply_markup=keyb_standart)
 
 
 @dp.message_handler(state=States.tech)
@@ -357,12 +422,13 @@ async def restart(message: types.Message, state: FSMContext):
 
     async def null_que():
         try:
-            keyb = keyb_admin if arry.queu[i] in arry.person else keyb_standart
-            await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
-                                                 'неудобство', reply_markup=keyb)
-            await bot.send_message(292075774, f"В очереди был: {arry.que_name_id[str(arry.queu[i])]}")
+            name_op_que = await db_out('fio_id', 'fio', f'chat_id = {arry.queu[i]}')
+            keyboard_que = keyb_admin if arry.queu[i] in arry.person else keyb_standart
+            await bot.send_message(arry.queu[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз через пару '
+                                                 'секунд. Извини за неудобство', reply_markup=keyboard_que)
+            await bot.send_message(292075774, f"В очереди был: {name_op_que[0]}")
         except ValueError:
-            await bot.send_message(292075774, "Был перебор")
+            await bot.send_message(292075774, "Был перебор очереди")
 
     if message.text == "Да, обнулить очередь":
         for i in range(len(arry.queu)):
@@ -372,27 +438,29 @@ async def restart(message: types.Message, state: FSMContext):
         await state.finish()
         return
 
-    iter = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
+    iterate = max(len(arry.queu), len(arry.pre_lp), len(arry.lp))
     arry.buf_op = {}
-    for i in range(iter):
+    for i in range(iterate):
         if i < len(arry.queu):
             await null_que()
         if i < len(arry.pre_lp):
             try:
-                keyb = keyb_admin if arry.pre_lp[i] in arry.person else keyb_standart
+                name_op = await db_out('fio_id', 'fio', f'chat_id = {arry.pre_lp[i]}')
+                keyboard = keyb_admin if arry.pre_lp[i] in arry.person else keyb_standart
                 await bot.send_message(arry.pre_lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за '
-                                                       'неудобство', reply_markup=keyb)
-                await bot.send_message(292075774, f"В перед ЛП был: {arry.que_name_id[str(arry.pre_lp[i])]}")
+                                                       'неудобство', reply_markup=keyboard)
+                await bot.send_message(292075774, f"В перед ЛП был: {name_op[0]}")
             except ValueError:
-                await bot.send_message(292075774, "Был перебор")
+                await bot.send_message(292075774, "Был перебор перед лп")
         if i < len(arry.lp):
             try:
-                keyb = keyb_admin if arry.lp[i] in arry.person else keyb_standart
-                await bot.send_message(arry.lp[i], 'Бот перезапущен. Встань, пожалуйста в очередь еще раз. Извини за '
-                                                   'неудобство', reply_markup=keyb)
-                await bot.send_message(292075774, f"В ЛП был: {arry.que_name_id[str(arry.lp[i])]}")
+                name_op = await db_out('fio_id', 'fio', f'chat_id = {arry.lp[i]}')
+                keyboard = keyb_admin if arry.lp[i] in arry.person else keyb_standart
+                await bot.send_message(arry.lp[i], 'Бот перезапущен. Заверши этот ЛП самостоятельно. Извини за '
+                                                   'неудобство', reply_markup=keyboard)
+                await bot.send_message(292075774, f"В ЛП был: {name_op[0]}")
             except ValueError:
-                await bot.send_message(292075774, "Был перебор")
+                await bot.send_message(292075774, "Был перебор лп")
     arry.queu = []
     arry.pre_lp = []
     arry.lp = []
@@ -408,9 +476,11 @@ async def rename_1(message: types.Message, state: FSMContext):
         await state.finish()
         return
     await message.answer("Список ОП с именами:")
-    for i in arry.que_name_id:
-        await message.answer(f"\nID: {i}, имя: {arry.que_name_id[i]}")
-    await message.answer("Напиши, пожалуйста, ID оп, которого нужно переименовать", reply_markup=keyb_back)
+    out_mass = await db_out('fio_id', one_element=False)
+    for i in out_mass:
+        await message.answer(f"{i[0]}. ID: {i[2]}, имя: {i[1]}")
+    await message.answer("Напиши, пожалуйста, порядковый номер оп, которого нужно переименовать",
+                         reply_markup=keyb_back)
     await state.finish()
     await States.rename_2.set()
 
@@ -421,21 +491,23 @@ async def rename_2(message: types.Message, state: FSMContext):
         await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
         await state.finish()
         return
-    if str(message.text) in arry.que_name_id.keys():
-        arry.rename_id = message.text
+    if await db_out('fio_id', filter_sql=f'id = {message.text}') is not None:
         await message.answer("Отлично! Теперь напиши его новое имя")
         await state.finish()
+        async with state.proxy() as data:
+            data['rename_id'] = message.text
         await States.rename_3.set()
     else:
-        await message.answer("К сожалению, не нашел такого оператора. Проверь, пожалуйста, правильность ID и отправь "
-                             "еще раз :)", reply_markup=keyb_back)
+        await message.answer("К сожалению, не нашел такого оператора. Проверь, пожалуйста, правильность номера и "
+                             "отправь еще раз :)", reply_markup=keyb_back)
 
 
 @dp.message_handler(state=States.rename_3)
 async def rename_3(message: types.Message, state: FSMContext):
-    arry.que_name_id[arry.rename_id] = message.text
-    await message.answer(f"Готово! Теперь у оператора {arry.rename_id} имя {message.text}")
-    arry.rename_id = 0
+    async with state.proxy() as data:
+        rename_id = data['rename_id']
+    await db_upd('fio_id', 'fio', message.text, f'id = {rename_id}')
+    await message.answer(f"Готово! Теперь у оператора {rename_id} имя {message.text}")
     await state.finish()
     await message.answer("Чем могу помочь?", reply_markup=keyb_admin)
 
@@ -456,7 +528,7 @@ async def new_name(message: types.Message, state: FSMContext):
         op_name.append(i)
     str_id = str(''.join(map(str, tg_id)))
     str_name = str(''.join(map(str, op_name)))
-    arry.que_name_id[str_id] = str_name
+    await db_in_fio([str_name, str_id])
     await message.answer(f"Оператору {str_id} присвоено имя {str_name}")
 
 
@@ -625,20 +697,62 @@ async def rules_start_now(message: types.Message, state: FSMContext):
 
 '''
 
+
+@dp.callback_query_handler(lambda c: c.data == 'В главное меню')
+async def to_home(callback_query: types.CallbackQuery, state: FSMContext):
+    async with state.proxy() as data:
+        chat_id = data['id_for_home']
+    keyboard = keyb_admin if chat_id in arry.person else keyb_standart
+    await bot.send_message(chat_id, "Чем могу помочь?", reply_markup=keyboard)
+    await state.finish()
+
+
+@dp.callback_query_handler(lambda c: c.data == 'None')
+async def process_callback_none(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id, text='Выбери дату')
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith('day'))
+async def process_callback_day(callback_query: types.CallbackQuery, state: FSMContext):
+    async with state.proxy() as data:
+        firstDateFull = data['firstDateFull']
+    day_short = callback_query.data[3:8]  # день в формате dd.mm = [3:8]
+    day_full = callback_query.data[8:18]  # день в формате yyyy-mm-dd = [8:18]
+    day_code = callback_query.data[18:]  # номер дня от 0 до 30 = [18:]
+    if firstDateFull is None:
+        async with state.proxy() as data:
+            data['firstDateFull'] = day_full
+            data['firstDateCode'] = day_code
+            data['firstDateShort'] = day_short
+        await bot.answer_callback_query(callback_query.id, text='Первая дата выбрана. Выбери вторую.')
+    else:
+        await bot.answer_callback_query(callback_query.id, text='Ты молодец :)')
+        async with state.proxy() as data:
+            data['lastDateFull'] = day_full
+            data['lastDateCode'] = day_code
+            firstDateShort = data['firstDateShort']
+        keyb_now = keyb1(
+            ["Нужна статистика по всем операторам", "↩️ Назад"]) if day_full == firstDateFull else keyb_back
+        await bot.send_message(data['chat_id'], f'Стата будет с {firstDateShort} по {day_short}. Теперь перешли мне '
+                                                f'любое сообщение оператора, по которому хочешь узнать статистику, либо'
+                                                f' отправь мне его фамилию в ответном сообщении', reply_markup=keyb_now)
+        make_calendar.null_inline_kb1()
+        await States.op_statistic.set()
+
+
 @dp.message_handler()
 async def queue_on(message: types.Message, state: FSMContext):  # нужно разобрать этот метод и сделать адреса
     if message.text == "Встать в очередь":
-        if arry.que_name_id.get(str(message.chat.id)) is None:
+        op = await db_out('fio_id', filter_sql=f'chat_id = {message.chat.id}')
+        if op is None:
             await message.answer("К сожалению, я не знаю твоего имени и фамилии. Введи их в ответном сообщении.")
             await States.waiting_fio.set()
             return
-        assert message.chat.id not in arry.buf_op.keys(), 'Оператор уже есть в лп / перед лп / очереди'
-        arry.buf_op[message.chat.id] = oper.Oper(arry.que_name_id[str(message.chat.id)], message.chat.id,
-                                                 datetime.now().strftime("%H:%M:%S"),
+        assert message.chat.id not in arry.buf_op.keys(), 'Operator also is in  lp / pre_lp/ queue'
+        arry.buf_op[message.chat.id] = oper.Oper(op[1], message.chat.id, datetime.now().strftime("%H:%M:%S"),
                                                  username='@' + message.chat.username)
         arry.buf_op[message.chat.id].ready = False
         arry.queu.append(message.chat.id)
-
         if len(arry.lp) + len(arry.pre_lp) < arry.lp_now:
             await start_lp(message.chat.id, state)
             return
@@ -673,10 +787,13 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await lp(message.chat.id, state)
         except:
             await bot.send_message(292075774, f"Ошибка. Вызов \"Закрыл чаты\" оператором {message.chat.id}")
-            keyb = keyb_admin if message.chat.id in arry.person else keyb_standart
             await message.answer("Ошибка! Этой кнопки у тебя не должно быть, так как тебя и не было в перед ЛП. Если "
                                  "это не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh"
-                                 "\nЧем могу помочь?", reply_markup=keyb)
+                                 "\nЕсли последнее сообщение бота про то, что начался ЛП, то твой ЛП идет, и ты можешь "
+                                 "спокойно отдыхать. Если же это не так, то воспользуйся кнопкой под сообщением, чтобы "
+                                 "перейти в главное меню", reply_markup=keyb2(["В главное меню"]))
+            async with state.proxy() as data:
+                data['id_for_home'] = message.chat.id
         finally:
             return
     elif message.text == 'Дoсрочно выйти с ЛП':
@@ -689,10 +806,7 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             arry.buf_op[message.chat.id].start = arry.buf_op[message.chat.id].start.strftime("%H:%M:%S")
             arry.buf_op[message.chat.id].pre_start = arry.buf_op[message.chat.id].pre_start.strftime("%H:%M:%S")
             arry.buf_op[message.chat.id].date = datetime.now().date()
-            if len(arry.day_oper[0]) >= 1:
-                if arry.day_oper[0][0].date != datetime.now().date():
-                    day_stat()
-            arry.day_oper[0].append(arry.buf_op[message.chat.id])
+            await db_in_op(oper.Oper.to_mass_for_sql(arry.buf_op[message.chat.id]))
             del arry.buf_op[message.chat.id]
             if len(arry.queu) > 0 and len(arry.lp) + len(arry.pre_lp) == arry.lp_now - 1:
                 await start_lp(arry.queu[0], state)
@@ -725,16 +839,18 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
         except ValueError:
             await bot.send_message(292075774, f"Ошибка. Вызов \"Выйти из очереди\" оператором {message.chat.id}")
             await message.answer("Ошибка! Этой кнопки у тебя не должно быть, так как тебя и не было в очереди. Если это"
-                                 " не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh "
-                                 "\nЧем могу помочь?", reply_markup=keyb)
+                                 " не так, сделай, пожалуйста, скрин взаимодействия с ботом и отправь его @kretov_zh"
+                                 "\nЕсли последнее сообщение бота про то, что ты должен перейти в статус Перед обедом, "
+                                 "то тебе необходимо закрывать чаты и идти на ЛП либо сразу же досрочно завершить ЛП, "
+                                 "чтобы не занимать вакантное место. Если же это не так, то воспользуйся кнопкой под "
+                                 "сообщением, чтобы перейти в главное меню", reply_markup=keyb2(["В главное меню"]))
+            async with state.proxy() as data:
+                data['id_for_home'] = message.chat.id
         finally:
             return
     elif message.text == "Статистика":
         if message.chat.id in arry.person:
-            await message.answer('За какой день нужна статистика?',
-                                 reply_markup=keyb1(['Сегодня', 'Вчера', '2 дня назад', '3 дня назад', '4 дня назад',
-                                                     '5 дней назад', '6 дней назад', "↩️ Назад"]))
-            await States.main_statistic.set()
+            await main_statistic_1(message, state)
         else:
             await message.answer("I don't understand you.")
     elif message.text == "Кто сейчас?":
@@ -761,10 +877,22 @@ async def queue_on(message: types.Message, state: FSMContext):  # нужно р�
             await message.answer("Действительно хочешь переименовать оператора?",
                                  reply_markup=keyb1(['Да', "↩️ Назад"]))
             await States.rename_1.set()
+    elif message.text == 'activate' and message.chat.id == 292075774:
+        is_or_no = await db_out('admin', filter_sql='chat_id = 292075774')
+        if is_or_no is None:
+            await db_in_admin([292075774])
+            await message.answer("Ты админ", reply_markup=keyb_admin)
+        admins = await db_out('admin', column='chat_id', one_element=False)
+        for admin in admins:
+            arry.person.append(admin[0])
+    elif message.text == 'check_admin':
+        result_mass = await db_out('admin', one_element=False)
+        await message.answer(f'{result_mass}\n{arry.person}')
     else:
         await message.answer("I don't understand you.")
     return
 
 
 if __name__ == '__main__':
+    db()
     executor.start_polling(dp)
